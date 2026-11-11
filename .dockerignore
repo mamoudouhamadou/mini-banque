@@ -1,0 +1,12 @@
+# Fichiers à ne PAS envoyer à Docker pendant la construction
+target
+frontend/node_modules
+frontend/dist
+frontend/.angular
+.git
+.github
+.idea
+.vscode
+docs
+**/*.log
+.env

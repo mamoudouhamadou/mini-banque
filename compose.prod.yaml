@@ -1,0 +1,45 @@
+# Toute l'application dans Docker, comme en production :
+#   docker compose -f compose.prod.yaml up -d --build      →  http://localhost:8083
+#   docker compose -f compose.prod.yaml down               (ajouter -v pour effacer la base)
+#
+# (compose.yaml, lui, ne contient que PostgreSQL : Spring Boot le démarre tout seul en développement.)
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: minibanque
+      POSTGRES_USER: minibanque
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-minibanque_dev}
+    volumes:
+      - donnees_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minibanque -d minibanque"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      secrets: [ca_supplementaire]
+    environment:
+      # Spring Boot lit ces variables : SPRING_DATASOURCE_URL ↔ spring.datasource.url, etc.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/minibanque
+      SPRING_DATASOURCE_USERNAME: minibanque
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-minibanque_dev}
+      JWT_SECRET: ${JWT_SECRET:?Définis JWT_SECRET dans le fichier .env (voir .env.example)}
+    ports:
+      - "${PORT_APP:-8083}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  donnees_prod:
+
+# Certificat racine facultatif, utilisé SEULEMENT pendant la construction (npm ci, Maven).
+# Utile si un antivirus (ex. Avast) ou un proxy d'entreprise inspecte le HTTPS.
+secrets:
+  ca_supplementaire:
+    file: ${CA_SUPPLEMENTAIRE:-./docker/aucun-certificat.pem}

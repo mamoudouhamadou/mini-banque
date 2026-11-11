@@ -1,0 +1,24 @@
+# « Blueprint » Render : l'infrastructure décrite dans un fichier (Infrastructure as Code).
+# Render → New → Blueprint → choisir ce dépôt. Guide complet : docs/DEPLOIEMENT.md
+
+services:
+  - type: web
+    name: mini-banque
+    runtime: docker
+    plan: free
+    region: ohio
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    # GitHub Actions déclenche le déploiement APRÈS que tous les tests soient passés
+    autoDeployTrigger: "off"
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true # Render génère une longue valeur aléatoire
+      # Base Neon, au format JDBC : jdbc:postgresql://<hôte>/<base>?sslmode=require
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false

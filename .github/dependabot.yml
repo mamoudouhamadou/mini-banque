@@ -1,0 +1,23 @@
+# Dependabot propose automatiquement les mises à jour (et les correctifs de sécurité) ;
+# la CI les teste avant qu'on les fusionne. Les mises à jour mineures sont regroupées.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      mineures: { update-types: [minor, patch] }
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly }
+    groups:
+      mineures: { update-types: [minor, patch] }
+
+  - package-ecosystem: docker
+    directory: /
+    schedule: { interval: monthly }
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }

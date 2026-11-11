@@ -1,8 +1,10 @@
 # Mini-banque
 
+[![CI](https://github.com/mamoudouhamadou/mini-banque/actions/workflows/ci.yml/badge.svg)](https://github.com/mamoudouhamadou/mini-banque/actions/workflows/ci.yml)
+
 API bancaire en **Java 25 / Spring Boot 4** : des clients qui s'inscrivent, ouvrent des comptes, déposent, retirent et virent de l'argent **de façon transactionnelle et sécurisée**, sans jamais perdre un cent, même en cas d'accès simultanés.
 
-> 🚧 En construction. Voir la [feuille de route](docs/FEUILLE_DE_ROUTE.md) et le [journal](docs/JOURNAL.md).
+Voir la [feuille de route](docs/FEUILLE_DE_ROUTE.md), le [journal d'apprentissage](docs/JOURNAL.md) et le [guide de mise en ligne](docs/DEPLOIEMENT.md).
 
 ## Stack
 - **Java 25** (LTS), **Spring Boot 4.1** : Web MVC, Data JPA (Hibernate), Validation, Actuator
@@ -12,8 +14,16 @@ API bancaire en **Java 25 / Spring Boot 4** : des clients qui s'inscrivent, ouvr
 - Erreurs au format standard **RFC 9457** (`application/problem+json`)
 - **Documentation OpenAPI 3** (springdoc) : contrat sur `/v3/api-docs`, **Swagger UI** sur `/swagger-ui.html`
 - **Interface Angular 21** (dossier [`frontend/`](frontend/)) : signals, *zoneless*, Reactive Forms, intercepteur JWT, gardes de route, Vitest
+- **Docker** : une image de 136 Mo (Angular + Spring Boot, JRE seulement, JAR en couches, utilisateur non-root) ; **GitHub Actions** (tests Java et Angular, image, test de bout en bout, déploiement continu sur Render + Neon) ; **Dependabot**
 
-## Lancer
+## Tout lancer avec Docker
+
+```bash
+cp .env.example .env                              # puis remplace JWT_SECRET
+docker compose -f compose.prod.yaml up -d --build # http://localhost:8083 (interface + API + Swagger UI)
+```
+
+## Développer
 
 Prérequis : **JDK 25** et **Docker Desktop** démarré.
 

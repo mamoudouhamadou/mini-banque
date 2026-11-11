@@ -46,10 +46,21 @@ public class ConfigurationSecurite {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(regles -> regles
                         .requestMatchers(HttpMethod.POST, "/api/auth/inscription", "/api/auth/connexion").permitAll()
-                        .requestMatchers("/actuator/health", "/error").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/info", "/error").permitAll()
                         // Documentation publique : elle décrit l'API, elle ne donne accès à aucune donnée.
                         .requestMatchers(HttpMethod.GET, "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
+                        // Toute l'API (sauf ce qui précède) exige un jeton
+                        .requestMatchers("/api/**").authenticated()
+                        // Interface Angular : fichiers statiques et routes de la SPA (aucune donnée dedans)
+                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.ico", "/*.js", "/*.css",
+                                "/connexion", "/comptes", "/comptes/*", "/virement").permitAll()
                         .anyRequest().authenticated()) // refus par défaut : une route oubliée reste protégée
+                // En-têtes de sécurité : Spring Security ajoute déjà nosniff, X-Frame-Options et HSTS (en HTTPS).
+                // On ajoute une politique de contenu (CSP) : seuls les scripts et styles de NOTRE domaine s'exécutent,
+                // ce qui limite les dégâts d'une injection de script (XSS).
+                .headers(h -> h.contentSecurityPolicy(csp -> csp.policyDirectives(
+                        "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                                + "frame-ancestors 'none'; base-uri 'self'; form-action 'self'")))
                 .oauth2ResourceServer(rs -> rs
                         .jwt(Customizer.withDefaults())
                         .authenticationEntryPoint(nonAuthentifie()))

@@ -258,3 +258,50 @@ Une colonne `NOT NULL` ne peut pas être ajoutée à une table qui contient déj
 1. Lance l'API et l'interface (README), crée ton accès et fais un virement vers un autre client.
 2. Génère un client TypeScript depuis `/v3/api-docs` (avec `openapi-typescript`), puis compare-le à `modeles.ts`.
 3. Ajoute la pagination à la page « Mes comptes », comme celle du relevé.
+
+---
+
+## Étape 5 : Docker, CI/CD et mise en ligne
+
+### Ordre de lecture
+1. `InterfaceWebController.java` et les nouvelles règles de `ConfigurationSecurite` : Spring sert l'interface Angular.
+2. `application.properties` : `server.port=${PORT}`, `forward-headers-strategy`, `/actuator/info`.
+3. `Dockerfile` (3 étapes), puis `.dockerignore` et `compose.prod.yaml`.
+4. `.github/workflows/ci.yml`, puis `.github/dependabot.yml`.
+5. `render.yaml` et `docs/DEPLOIEMENT.md`.
+
+### Notions clés
+- **Un seul service à héberger :** Angular est compilé, puis copié dans `src/main/resources/static`, et Spring Boot sert ces fichiers. Pour une route Angular rechargée dans le navigateur (`/comptes/7`), Spring renvoie `index.html` (*forward*), puis Angular affiche la bonne page. Les routes sont **listées explicitement** : une URL inconnue n'est pas servie comme l'interface.
+- **Sécurité :** l'interface (fichiers statiques et routes) est publique, puisqu'elle ne contient aucune donnée. `/api/**` exige toujours un jeton (testé). Une **CSP** (`default-src 'self'`) n'autorise que les scripts de notre domaine. J'ai désactivé l'*inlining* du CSS critique d'Angular, qui ajoute un `onload="…"` en ligne : la CSP l'aurait bloqué.
+- **Dockerfile en 3 étapes :**
+  1. Node : compile Angular ;
+  2. Maven et JDK 25 : compile Spring Boot avec l'interface intégrée, puis **découpe le JAR en couches** ;
+  3. **JRE seulement**, utilisateur non-root, *healthcheck* : **136 Mo**.
+  Les couches font qu'une nouvelle version ne renvoie que la petite couche « application » : les dépendances restent en cache.
+- **Cache Maven (`--mount=type=cache`) :** les dépendances ne sont pas retéléchargées à chaque construction.
+- **Configuration par variables d'environnement :** `SPRING_DATASOURCE_URL` correspond automatiquement à `spring.datasource.url` (*relaxed binding* de Spring Boot). Aucun mot de passe de production dans le code.
+- **`server.forward-headers-strategy=framework` :** derrière le proxy HTTPS de Render, Spring construit des URL en `https://` (l'en-tête `Location` par exemple).
+- **Migrations en production :** Flyway les applique **au démarrage**. Contrairement au Projet 1, la CI n'a pas besoin d'accéder à la base.
+- **CI, 4 jobs :**
+  - `api` : `./mvnw verify`, avec les 49 tests et Testcontainers sur les machines GitHub ;
+  - `interface` : tests Vitest et build de production ;
+  - `docker` : l'image et un **test de bout en bout** (interface, Swagger, inscription, comptes, dépôt, virement, `401`, `422`) ;
+  - `deploy` : crochet Render, puis attente que `/actuator/info` annonce **ce** commit, puis test de fumée.
+
+### Problèmes rencontrés (histoires C.A.R.)
+1. **`mvnw` sans droit d'exécution :** Windows ne garde pas ce droit, donc `./mvnw` aurait échoué sous Linux dans la CI. Je l'ai corrigé dans Git (`git update-index --chmod=+x mvnw`), avant même le premier essai.
+2. **Le test de bout en bout recevait un `401`** alors que toutes les pages répondaient `200`. En traçant le script (`bash -x`), j'ai trouvé la cause : `curl -I` envoie une requête **HEAD**, alors que la sécurité n'autorise que **GET** sur l'interface. L'application était correcte, puisque les navigateurs font des GET. J'ai corrigé le test pour lire les en-têtes d'un vrai GET.
+3. **Avast** (comme au Projet 1) : le certificat est passé à Node **et** au magasin de certificats Java de l'étape de construction, comme *secret de build*. Il n'est jamais copié dans l'image finale.
+
+### Vérifié en vrai
+- ✅ Image construite (136 Mo) ; application et PostgreSQL `healthy`.
+- ✅ Le test de bout en bout du workflow, exécuté localement : `✅ Mini-banque fonctionnelle de bout en bout`.
+- ✅ Dans le navigateur : Angular se charge depuis Spring Boot, avec les styles et la redirection vers la connexion, et **aucune erreur CSP** dans la console.
+- ✅ 49 tests Java, 9 tests Angular, et actionlint sans erreur.
+- ⚠️ **Pas encore fait :** la mise en ligne réelle. Elle demande de créer le projet Neon et le service Render (voir `docs/DEPLOIEMENT.md`).
+
+### Questions possibles en entrevue
+- *Comment déployez-vous une application Spring Boot avec Angular ?* → Une seule image Docker. Angular est compilé dans les ressources statiques, et Spring sert l'interface et l'API. C'est une seule origine, donc pas de CORS.
+- *Pourquoi un JAR en couches ?* → Pour accélérer les constructions et les déploiements : seule la couche de l'application change d'une version à l'autre.
+- *JDK ou JRE dans l'image finale ?* → Le JRE suffit pour exécuter : l'image est plus petite et la surface d'attaque réduite.
+- *Comment savez-vous que la bonne version est en ligne ?* → `/actuator/info` expose le commit déployé, et la CI attend qu'il corresponde avant le test de fumée.

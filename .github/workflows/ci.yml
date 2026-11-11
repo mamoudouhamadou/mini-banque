@@ -1,0 +1,164 @@
+# Intégration et déploiement continus de la mini-banque.
+# À chaque push / pull request : tests Java (avec un vrai PostgreSQL), tests Angular,
+# image Docker + test de bout en bout. Sur main (si activé) : mise en ligne sur Render.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Sur une pull request, un nouveau push annule l'exécution précédente ; jamais sur main (déploiement).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # --------------------------------------------------------------- API Java
+  api:
+    name: API Java (49 tests, Testcontainers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven # réutilise les dépendances Maven entre les exécutions
+
+      # « verify » compile, lance tous les tests (Docker est disponible sur les machines GitHub,
+      # donc Testcontainers démarre PostgreSQL) et construit le JAR.
+      - name: Tests et construction
+        run: ./mvnw -B verify
+
+  # --------------------------------------------------------- Interface Angular
+  interface:
+    name: Interface Angular (tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - name: Tests (Vitest)
+        run: npx ng test --watch=false
+      - name: Build de production
+        run: npx ng build --configuration production
+
+  # ------------------------------------------ Image Docker + test de bout en bout
+  docker:
+    name: Docker (image + test de bout en bout)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [api, interface]
+    env:
+      JWT_SECRET: secret-de-ci-qui-fait-au-moins-32-caracteres-de-long
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Construire et démarrer (PostgreSQL + application)
+        run: docker compose -f compose.prod.yaml up -d --build --wait --wait-timeout 240
+
+      - name: Test de bout en bout
+        run: |
+          set -euo pipefail
+          URL=http://localhost:8083
+          J='Content-Type: application/json'
+
+          # Santé, version, interface Angular et documentation
+          curl -fsS "$URL/actuator/health" | grep -q '"UP"'
+          curl -fsS "$URL/" | grep -q '<app-root'
+          curl -fsS "$URL/comptes/7" | grep -q '<app-root'      # route Angular rechargée
+          curl -fsS -o /dev/null "$URL/swagger-ui/index.html"
+          # En-têtes d'une vraie requête GET (-D -) : « curl -I » enverrait HEAD, non autorisé sur l'interface
+          curl -fsS -D - -o /dev/null "$URL/" | grep -qi "content-security-policy: default-src 'self'"
+
+          # Inscription → jeton → deux comptes → dépôt → virement
+          JETON=$(curl -fsS -X POST "$URL/api/auth/inscription" -H "$J" \
+            -d '{"courriel":"ci@exemple.test","motDePasse":"mot-de-passe-de-ci","nom":"CI"}' | jq -r .jeton)
+          A="Authorization: Bearer $JETON"
+          C1=$(curl -fsS -X POST "$URL/api/comptes" -H "$J" -H "$A" -d '{"titulaire":"Chèques","depotInitial":100}' | jq .id)
+          C2=$(curl -fsS -X POST "$URL/api/comptes" -H "$J" -H "$A" -d '{"titulaire":"Épargne","depotInitial":0}' | jq .id)
+          curl -fsS -X POST "$URL/api/comptes/$C1/depots" -H "$J" -H "$A" -d '{"montant":50}' > /dev/null
+          curl -fsS -X POST "$URL/api/virements" -H "$J" -H "$A" \
+            -d "{\"source\":$C1,\"destination\":$C2,\"montant\":30}" > /dev/null
+          test "$(curl -fsS "$URL/api/comptes/$C1" -H "$A" | jq -r .solde)" = "120.00"
+          test "$(curl -fsS "$URL/api/comptes/$C2" -H "$A" | jq -r .solde)" = "30.00"
+
+          # Sans jeton → 401 ; retrait trop gros → 422
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$URL/api/comptes")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$URL/api/comptes/$C2/retraits" -H "$J" -H "$A" -d '{"montant":999}')" = "422"
+          echo "✅ Mini-banque fonctionnelle de bout en bout"
+
+      - name: Journaux (en cas d'échec)
+        if: failure()
+        run: docker compose -f compose.prod.yaml logs --no-color
+
+      - name: Arrêter
+        if: always()
+        run: docker compose -f compose.prod.yaml down -v
+
+  # --------------------------------------------------- Déploiement continu (CD)
+  # Seulement sur main, après TOUS les tests, et une fois l'hébergement configuré
+  # (variable de dépôt DEPLOIEMENT_ACTIF = true ; voir docs/DEPLOIEMENT.md).
+  # Les migrations Flyway s'appliquent toutes seules au démarrage de l'application.
+  deploy:
+    name: Déploiement (Render + Neon)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOIEMENT_ACTIF == 'true'
+    environment:
+      name: production
+      url: ${{ vars.URL_PRODUCTION }}
+    concurrency:
+      group: deploiement-production
+      cancel-in-progress: false
+    steps:
+      - name: Déclencher le déploiement (Render)
+        env:
+          CROCHET: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "${CROCHET}&ref=${{ github.sha }}" > /dev/null
+
+      - name: Attendre la nouvelle version en ligne
+        env:
+          URL: ${{ vars.URL_PRODUCTION }}
+        run: |
+          # Render construit l'image (Angular + Maven : plusieurs minutes), puis Spring Boot démarre.
+          for i in $(seq 1 80); do
+            VERSION=$(curl -fsS --max-time 60 "$URL/actuator/info" 2>/dev/null | jq -r .app.version || true)
+            if [ "$VERSION" = "${{ github.sha }}" ]; then
+              echo "✅ Version ${{ github.sha }} en ligne : $URL"
+              exit 0
+            fi
+            echo "Version en ligne : ${VERSION:-indisponible}… (essai $i/80)"
+            sleep 20
+          done
+          echo "❌ La nouvelle version n'est pas en ligne après ~27 minutes"
+          exit 1
+
+      - name: Test de fumée en production
+        env:
+          URL: ${{ vars.URL_PRODUCTION }}
+        run: |
+          set -euo pipefail
+          curl -fsS "$URL/actuator/health" | grep -q '"UP"'
+          curl -fsS "$URL/" | grep -q '<app-root'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$URL/api/comptes")" = "401"
+          echo "✅ Production fonctionnelle"
