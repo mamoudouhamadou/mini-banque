@@ -7,7 +7,7 @@
 # Les tests ne tournent pas ici : la CI (GitHub Actions) les lance avant de construire l'image.
 
 # ---------- 1. Interface Angular ----------
-FROM node:24-alpine AS interface
+FROM node:25-alpine AS interface
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 # Certificat racine facultatif (antivirus ou proxy qui inspecte le HTTPS), utilisé seulement pendant npm ci
