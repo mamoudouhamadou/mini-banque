@@ -18,7 +18,7 @@ COPY frontend/ ./
 RUN npx ng build --configuration production
 
 # ---------- 2. API Spring Boot (avec l'interface intégrée) ----------
-FROM maven:3.9-eclipse-temurin-25-alpine AS api
+FROM maven:3.9-eclipse-temurin-26-alpine AS api
 WORKDIR /app
 # Même certificat facultatif, ajouté au magasin de certificats de Java de CETTE étape seulement
 RUN --mount=type=secret,id=ca_supplementaire,required=false \
