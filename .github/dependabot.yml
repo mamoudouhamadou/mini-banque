@@ -1,22 +1,50 @@
 # Dependabot propose automatiquement les mises à jour (et les correctifs de sécurité) ;
-# la CI les teste avant qu'on les fusionne. Les mises à jour mineures sont regroupées.
+# la CI les teste avant qu'on les fusionne.
+#
+# Règles choisies après la première vague de PR (7 PR, dont 5 rouges) :
+#  1. Les paquets Angular sont mis à jour ENSEMBLE, dans une seule PR : Angular exige que
+#     @angular/core, common, router… aient exactement la même version.
+#  2. Les versions MAJEURES sont ignorées (Angular 22, TypeScript 7, Spring Boot 5…) :
+#     elles demandent des changements de code et se font à la main (ex. « ng update »).
+#  3. Les images Docker restent sur les versions LTS (Node 24, Java 25) : pas de saut automatique
+#     vers une version non LTS (Node 25, Java 26). Le passage à la LTS suivante est une décision humaine.
+# Les mises à jour de SÉCURITÉ, elles, sont toujours proposées (elles ne suivent pas ces filtres).
 version: 2
 updates:
   - package-ecosystem: maven
     directory: /
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       mineures: { update-types: [minor, patch] }
 
   - package-ecosystem: npm
     directory: /frontend
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
-      mineures: { update-types: [minor, patch] }
+      # Le premier groupe qui correspond l'emporte : Angular d'abord, tout ensemble
+      angular:
+        patterns: ["@angular/*", "@angular-devkit/*", "typescript"]
+      mineures:
+        update-types: [minor, patch]
 
   - package-ecosystem: docker
     directory: /
     schedule: { interval: monthly }
+    ignore:
+      # node:24-alpine → 25 : version majeure (et non LTS)
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
+      # maven:3.9-eclipse-temurin-25-alpine : la version de Java est dans le SUFFIXE de l'étiquette,
+      # que Dependabot ne sait pas classer en « majeure ». On change cette image à la main avec la LTS.
+      - dependency-name: "maven"
 
   - package-ecosystem: github-actions
     directory: /
