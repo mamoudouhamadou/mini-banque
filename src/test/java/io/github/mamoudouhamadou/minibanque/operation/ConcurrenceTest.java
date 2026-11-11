@@ -2,12 +2,16 @@ package io.github.mamoudouhamadou.minibanque.operation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.mamoudouhamadou.minibanque.OutilsApi;
 import io.github.mamoudouhamadou.minibanque.TestcontainersConfiguration;
+import io.github.mamoudouhamadou.minibanque.client.Client;
+import io.github.mamoudouhamadou.minibanque.client.ClientRepository;
 import io.github.mamoudouhamadou.minibanque.compte.CompteRepository;
 import io.github.mamoudouhamadou.minibanque.compte.CompteService;
 import io.github.mamoudouhamadou.minibanque.compte.OuvertureCompte;
 import io.github.mamoudouhamadou.minibanque.compte.SoldeInsuffisantException;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -49,9 +53,16 @@ class ConcurrenceTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    ClientRepository clients;
+
+    long client; // propriétaire des comptes de test
+
     @BeforeEach
-    void viderLaBase() {
-        jdbc.execute("TRUNCATE operation, compte RESTART IDENTITY");
+    void preparer() {
+        OutilsApi.viderLaBase(jdbc);
+        // Ici on appelle les services directement (sans HTTP) : on crée le client en base.
+        client = clients.save(new Client("ana@exemple.ca", "{noop}inutilise", "Ana", Instant.now())).getId();
     }
 
     /** Lance toutes les tâches en même temps et attend leurs résultats. */
@@ -73,13 +84,13 @@ class ConcurrenceTest {
 
     @Test
     void vingtRetraitsSimultanesNeDepensentJamaisPlusQueLeSolde() throws Exception {
-        long id = comptes.ouvrir(new OuvertureCompte("Ana", new BigDecimal("1000.00"))).id();
+        long id = comptes.ouvrir(client, new OuvertureCompte("Ana", new BigDecimal("1000.00"))).id();
 
         List<Callable<Boolean>> retraits = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
             retraits.add(() -> {
                 try {
-                    service.retirer(id, new MouvementRequete(new BigDecimal("100.00"), null));
+                    service.retirer(client, id, new MouvementRequete(new BigDecimal("100.00"), null));
                     return true;
                 } catch (SoldeInsuffisantException e) {
                     return false;
@@ -100,14 +111,14 @@ class ConcurrenceTest {
 
     @Test
     void centVirementsCroisesConserventLArgentSansInterblocage() throws Exception {
-        long ana = comptes.ouvrir(new OuvertureCompte("Ana", new BigDecimal("500.00"))).id();
-        long bob = comptes.ouvrir(new OuvertureCompte("Bob", new BigDecimal("500.00"))).id();
+        long ana = comptes.ouvrir(client, new OuvertureCompte("Ana", new BigDecimal("500.00"))).id();
+        long bob = comptes.ouvrir(client, new OuvertureCompte("Bob", new BigDecimal("500.00"))).id();
 
         // 50 virements Ana→Bob et 50 Bob→Ana, tous en même temps : le scénario classique d'interblocage.
         List<Callable<VirementReponse>> virements = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
-            virements.add(() -> service.virer(new VirementRequete(ana, bob, new BigDecimal("7.00"), null)));
-            virements.add(() -> service.virer(new VirementRequete(bob, ana, new BigDecimal("3.00"), null)));
+            virements.add(() -> service.virer(client, new VirementRequete(ana, bob, new BigDecimal("7.00"), null)));
+            virements.add(() -> service.virer(client, new VirementRequete(bob, ana, new BigDecimal("3.00"), null)));
         }
         for (Future<VirementReponse> v : lancerEnMemeTemps(virements)) {
             v.get(); // aucun virement ne doit échouer

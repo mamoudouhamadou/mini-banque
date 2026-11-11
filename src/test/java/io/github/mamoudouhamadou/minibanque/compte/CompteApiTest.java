@@ -1,9 +1,13 @@
 package io.github.mamoudouhamadou.minibanque.compte;
 
+import static io.github.mamoudouhamadou.minibanque.OutilsApi.get;
+import static io.github.mamoudouhamadou.minibanque.OutilsApi.inscrire;
+import static io.github.mamoudouhamadou.minibanque.OutilsApi.json;
+import static io.github.mamoudouhamadou.minibanque.OutilsApi.post;
+import static io.github.mamoudouhamadou.minibanque.OutilsApi.viderLaBase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.jayway.jsonpath.JsonPath;
 import io.github.mamoudouhamadou.minibanque.TestcontainersConfiguration;
 import java.math.BigDecimal;
 import java.util.List;
@@ -21,8 +25,8 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 /**
- * Tests d'INTÉGRATION : toute l'application (contrôleur → service → JPA → Flyway → PostgreSQL réel
- * dans Docker). MockMvcTester simule les requêtes HTTP sans ouvrir de port réseau.
+ * Tests d'INTÉGRATION : toute l'application (sécurité → contrôleur → service → JPA → Flyway → PostgreSQL
+ * réel dans Docker). MockMvcTester simule les requêtes HTTP sans ouvrir de port réseau.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -38,23 +42,16 @@ class CompteApiTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    String jeton; // le client connecté pour chaque test
+
     @BeforeEach
-    void viderLaBase() {
-        // Chaque test part de tables vides : les tests restent indépendants.
-        // (On vide « operation » aussi : sa clé étrangère interdit de supprimer un compte qui a un historique.)
-        jdbc.execute("TRUNCATE operation, compte RESTART IDENTITY");
+    void preparer() {
+        viderLaBase(jdbc); // chaque test part de tables vides : les tests restent indépendants
+        jeton = inscrire(mvc, "ana@exemple.ca");
     }
 
     private MvcTestResult ouvrir(String json) {
-        return mvc.post().uri("/api/comptes").contentType(MediaType.APPLICATION_JSON).content(json).exchange();
-    }
-
-    private static <T> T json(MvcTestResult resultat, String chemin) {
-        try {
-            return JsonPath.read(resultat.getResponse().getContentAsString(), chemin);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
+        return post(mvc, jeton, "/api/comptes", json);
     }
 
     @Test
@@ -78,7 +75,7 @@ class CompteApiTest {
     void retrouveUnCompteParSonId() {
         Integer id = json(ouvrir("{ \"titulaire\": \"Bob\", \"depotInitial\": 20 }"), "$.id");
 
-        MvcTestResult resultat = mvc.get().uri("/api/comptes/{id}", id).exchange();
+        MvcTestResult resultat = get(mvc, jeton, "/api/comptes/" + id);
 
         assertThat(resultat).hasStatusOk();
         assertThat((String) json(resultat, "$.titulaire")).isEqualTo("Bob");
@@ -86,7 +83,7 @@ class CompteApiTest {
 
     @Test
     void repond404AuFormatProblemDetailsPourUnCompteInexistant() {
-        MvcTestResult resultat = mvc.get().uri("/api/comptes/999999").exchange();
+        MvcTestResult resultat = get(mvc, jeton, "/api/comptes/999999");
 
         assertThat(resultat).hasStatus(HttpStatus.NOT_FOUND).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat((String) json(resultat, "$.title")).isEqualTo("Compte introuvable");
@@ -123,7 +120,7 @@ class CompteApiTest {
         ouvrir("{ \"titulaire\": \"Ana\", \"depotInitial\": 2 }");
         ouvrir("{ \"titulaire\": \"Bob\", \"depotInitial\": 3 }");
 
-        MvcTestResult resultat = mvc.get().uri("/api/comptes?size=2&sort=titulaire").exchange();
+        MvcTestResult resultat = get(mvc, jeton, "/api/comptes?size=2&sort=titulaire");
 
         assertThat(resultat).hasStatusOk();
         List<String> titulaires = json(resultat, "$.content[*].titulaire");
@@ -136,7 +133,7 @@ class CompteApiTest {
     void laBaseDeDonneesRefuseElleAussiUnSoldeNegatif() {
         // Même en contournant le code Java, la contrainte CHECK de la migration Flyway protège les données.
         assertThatThrownBy(() -> jdbc.update(
-                        "INSERT INTO compte (titulaire, solde, ouvert_le) VALUES ('Pirate', -1, now())"))
+                        "INSERT INTO compte (titulaire, solde, ouvert_le, client_id) VALUES ('Pirate', -1, now(), 1)"))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("solde_non_negatif");
     }

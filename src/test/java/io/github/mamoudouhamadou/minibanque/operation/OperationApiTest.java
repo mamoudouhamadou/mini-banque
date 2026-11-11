@@ -1,12 +1,17 @@
 package io.github.mamoudouhamadou.minibanque.operation;
 
+import static io.github.mamoudouhamadou.minibanque.OutilsApi.get;
+import static io.github.mamoudouhamadou.minibanque.OutilsApi.inscrire;
+import static io.github.mamoudouhamadou.minibanque.OutilsApi.json;
+import static io.github.mamoudouhamadou.minibanque.OutilsApi.viderLaBase;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.jayway.jsonpath.JsonPath;
+import io.github.mamoudouhamadou.minibanque.OutilsApi;
 import io.github.mamoudouhamadou.minibanque.TestcontainersConfiguration;
 import io.github.mamoudouhamadou.minibanque.compte.CompteRepository;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,23 +42,18 @@ class OperationApiTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    String jeton;
+
     @BeforeEach
-    void viderLaBase() {
-        jdbc.execute("TRUNCATE operation, compte RESTART IDENTITY");
+    void preparer() {
+        viderLaBase(jdbc);
+        jeton = inscrire(mvc, "ana@exemple.ca");
     }
 
     // ---------- petits outils ----------
 
     private MvcTestResult post(String url, String json) {
-        return mvc.post().uri(url).contentType(MediaType.APPLICATION_JSON).content(json).exchange();
-    }
-
-    private static <T> T json(MvcTestResult resultat, String chemin) {
-        try {
-            return JsonPath.read(resultat.getResponse().getContentAsString(), chemin);
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
+        return OutilsApi.post(mvc, jeton, url, json);
     }
 
     private long ouvrir(String titulaire, String depot) {
@@ -121,7 +121,7 @@ class OperationApiTest {
         assertThat(solde(bob)).isEqualTo(new BigDecimal("45.00"));
 
         String virementId = json(resultat, "$.id");
-        List<Operation> lignes = operations.findByVirementId(java.util.UUID.fromString(virementId));
+        List<Operation> lignes = operations.findByVirementId(UUID.fromString(virementId));
         assertThat(lignes).extracting(Operation::getType)
                 .containsExactlyInAnyOrder(TypeOperation.VIREMENT_DEBIT, TypeOperation.VIREMENT_CREDIT);
     }
@@ -164,7 +164,7 @@ class OperationApiTest {
         post("/api/comptes/" + ana + "/depots", "{\"montant\": 20}");
         post("/api/comptes/" + ana + "/retraits", "{\"montant\": 5}");
 
-        MvcTestResult resultat = mvc.get().uri("/api/comptes/{id}/operations?size=2", ana).exchange();
+        MvcTestResult resultat = get(mvc, jeton, "/api/comptes/" + ana + "/operations?size=2");
 
         assertThat(resultat).hasStatusOk();
         List<String> types = json(resultat, "$.content[*].type");
@@ -177,7 +177,7 @@ class OperationApiTest {
     @Test
     void releveRefuseUneTailleDePageExcessiveEtUnCompteInexistant() {
         long ana = ouvrir("Ana", "0");
-        assertThat(mvc.get().uri("/api/comptes/{id}/operations?size=500", ana).exchange()).hasStatus(HttpStatus.BAD_REQUEST);
-        assertThat(mvc.get().uri("/api/comptes/999/operations").exchange()).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(get(mvc, jeton, "/api/comptes/" + ana + "/operations?size=500")).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(get(mvc, jeton, "/api/comptes/999/operations")).hasStatus(HttpStatus.NOT_FOUND);
     }
 }

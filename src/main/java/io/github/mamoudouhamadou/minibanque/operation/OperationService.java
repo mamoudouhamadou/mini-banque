@@ -34,15 +34,15 @@ public class OperationService {
     }
 
     @Transactional
-    public OperationReponse deposer(long compteId, MouvementRequete demande) {
-        Compte compte = verrouiller(compteId);
+    public OperationReponse deposer(long clientId, long compteId, MouvementRequete demande) {
+        Compte compte = verrouillerLeMien(clientId, compteId);
         BigDecimal montant = compte.deposer(demande.montant());
         return enregistrer(compte, TypeOperation.DEPOT, montant, null, demande.description());
     }
 
     @Transactional
-    public OperationReponse retirer(long compteId, MouvementRequete demande) {
-        Compte compte = verrouiller(compteId);
+    public OperationReponse retirer(long clientId, long compteId, MouvementRequete demande) {
+        Compte compte = verrouillerLeMien(clientId, compteId);
         BigDecimal montant = compte.retirer(demande.montant()); // lève SoldeInsuffisantException si besoin
         return enregistrer(compte, TypeOperation.RETRAIT, montant, null, demande.description());
     }
@@ -50,9 +50,12 @@ public class OperationService {
     /**
      * Virement = débit + crédit dans la MÊME transaction (atomicité, le « A » d'ACID) :
      * impossible que l'argent sorte d'un compte sans entrer dans l'autre.
+     *
+     * <p>Autorisation : le compte SOURCE doit appartenir au client connecté ; la destination
+     * peut appartenir à n'importe quel client (comme un virement Interac).
      */
     @Transactional
-    public VirementReponse virer(VirementRequete demande) {
+    public VirementReponse virer(long clientId, VirementRequete demande) {
         long source = demande.source();
         long destination = demande.destination();
         if (source == destination) {
@@ -65,6 +68,11 @@ public class OperationService {
         Compte second = verrouiller(Math.max(source, destination));
         Compte debite = premier.getId() == source ? premier : second;
         Compte credite = debite == premier ? second : premier;
+
+        // On ne peut vider QUE ses propres comptes. Même réponse qu'un compte inexistant (404).
+        if (!debite.appartientA(clientId)) {
+            throw new CompteIntrouvableException(source);
+        }
 
         BigDecimal montant = debite.retirer(demande.montant()); // échoue AVANT tout crédit si le solde manque
         credite.deposer(montant);
@@ -81,8 +89,8 @@ public class OperationService {
 
     /** Le relevé : les opérations d'un compte, de la plus récente à la plus ancienne. */
     @Transactional(readOnly = true)
-    public Page<OperationReponse> releve(long compteId, int page, int taille) {
-        if (!comptes.existsById(compteId)) {
+    public Page<OperationReponse> releve(long clientId, long compteId, int page, int taille) {
+        if (!comptes.existsByIdAndClientId(compteId, clientId)) {
             throw new CompteIntrouvableException(compteId);
         }
         PageRequest demande = PageRequest.of(page, taille, Sort.by(Sort.Direction.DESC, "id"));
@@ -91,6 +99,15 @@ public class OperationService {
 
     private Compte verrouiller(long id) {
         return comptes.verrouiller(id).orElseThrow(() -> new CompteIntrouvableException(id));
+    }
+
+    /** Verrouille un compte du client connecté ; le compte d'un autre client répond comme s'il n'existait pas. */
+    private Compte verrouillerLeMien(long clientId, long compteId) {
+        Compte compte = verrouiller(compteId);
+        if (!compte.appartientA(clientId)) {
+            throw new CompteIntrouvableException(compteId);
+        }
+        return compte;
     }
 
     private OperationReponse enregistrer(

@@ -129,3 +129,62 @@ Au démarrage, Flyway a appliqué `V2` à la base de développement **sans touch
 1. Lance `ConcurrenceTest` seul (`mvnw test -Dtest=ConcurrenceTest`), puis refais la contre-épreuve toi-même.
 2. Ajoute une limite de retrait de 2 000 $ par jour : il faut additionner les retraits du jour (une requête `@Query` avec `SUM`). Pense au cas de deux retraits simultanés, le verrou est déjà là.
 3. **Idempotence :** un en-tête `Idempotency-Key` sur `POST /api/virements`, une table `virement` avec une contrainte `UNIQUE` sur la clé, et le même virement renvoyé si la clé existe déjà.
+
+---
+
+## Étape 3 : Spring Security, JWT et isolation des clients
+
+### Ordre de lecture
+1. `db/migration/V3__clients_et_proprietaires.sql` : une migration sur une table **déjà remplie**.
+2. `securite/ConfigurationSecurite.java` : **le fichier central**.
+3. `client/AuthService.java`, `client/AuthController.java`, puis `securite/Jetons.java`.
+4. `client/Inscription.java` : le constructeur compact.
+5. `CompteService`, puis `OperationService` (`verrouillerLeMien`, et la vérification de la source dans `virer`).
+6. `securite/SecuriteApiTest.java`.
+
+### Notions clés
+- **Authentification ou autorisation :** l'*authentification* répond à « qui es-tu ? » (jeton absent ou invalide → `401`). L'*autorisation* répond à « as-tu le droit ? » (ce compte est-il le tien ?).
+- **Chaîne de filtres de Spring Security :** chaque requête traverse des filtres **avant** d'atteindre le contrôleur. Le filtre *Bearer token* lit `Authorization: Bearer …`, et Spring vérifie la **signature**, l'**expiration** et l'**émetteur** (`iss`). On n'écrit aucun code de vérification : c'est le rôle de `oauth2ResourceServer().jwt()`.
+- **Refus par défaut :** `anyRequest().authenticated()`. Une nouvelle route oubliée reste **protégée**. On n'ouvre explicitement que l'inscription, la connexion et la santé.
+- **JWT (HS256) :** `en-tête.contenu.signature`. Le contenu (`iss`, `sub` = id du client, `iat`, `exp`) est **lisible** par tous, mais il ne peut pas être **modifié** sans la clé secrète. Le serveur ne garde aucune session : il est *stateless*, donc on peut lancer plusieurs instances sans partager d'état.
+- **Secret hors du code :** `JWT_SECRET` vient d'une variable d'environnement. L'application **refuse de démarrer** si la clé est absente ou fait moins de 32 caractères (256 bits pour HS256).
+- **BCrypt :** un hachage lent, avec un sel aléatoire. `DelegatingPasswordEncoder` préfixe le hachage par son algorithme (`{bcrypt}$2a$10$…`), ce qui permettra de migrer vers Argon2 sans invalider les anciens mots de passe.
+- **CSRF désactivé, et pourquoi c'est correct ici :** l'attaque CSRF exploite les **cookies**, que le navigateur envoie tout seul. Notre jeton voyage dans un **en-tête** que le navigateur n'envoie jamais de lui-même.
+- **`404` plutôt que `403`** pour le compte d'un autre client : on ne confirme même pas son existence. On le vérifie au niveau du **service**, pas seulement du contrôleur, et en SQL (`WHERE client_id = ?`).
+- **Virement entre clients :** la **source** doit m'appartenir, mais la **destination** peut être à quelqu'un d'autre, comme un virement Interac.
+- **Anti-énumération :**
+  - le même message d'erreur pour un courriel inconnu et pour un mauvais mot de passe ;
+  - un **hachage factice** comparé quand le courriel n'existe pas, pour que la réponse prenne le même temps : on ne peut pas deviner les courriels inscrits au chronomètre.
+- **Unicité robuste :** un index `UNIQUE (lower(courriel))` en base. Si deux inscriptions arrivent en même temps, c'est la base qui tranche, et l'exception devient un `409`.
+
+### La migration V3 sur des données existantes (*expand / backfill / contract*)
+Une colonne `NOT NULL` ne peut pas être ajoutée à une table qui contient déjà des lignes. Méthode en 3 temps :
+1. ajouter la colonne en acceptant `NULL` ;
+2. **remplir** les lignes existantes (rattachées à un client technique **qui ne peut pas se connecter**) ;
+3. **resserrer** : `NOT NULL`, clé étrangère et index.
+
+✅ Vérifié en vrai : ta base de développement avait 4 comptes des étapes 1-2. Ils ont tous été rattachés sans perte, et la connexion au client technique est impossible (`401`).
+
+### Problèmes rencontrés (histoires C.A.R.)
+1. **Un fichier de configuration de test qui écrase celui de l'application.** `src/test/resources/application.properties` **remplace** celui de `main` au lieu de le compléter : on aurait perdu `ddl-auto=validate`. Solution : le placer dans `src/test/resources/config/`. Spring Boot charge alors **les deux**.
+2. **Un vrai bogue trouvé par un test :** « ␣Ana@Exemple.CA␣ » (avec des espaces) était refusé par `@Email`, parce que la validation passe **avant** le nettoyage. Solution : un **constructeur compact** du `record`, qui normalise le courriel dès sa création, donc avant la validation. C'est exactement le même bogue que dans le Projet 1 (Zod) : une erreur classique, à connaître.
+
+### Tests
+**40 tests**, dont **13 de sécurité** (`SecuriteApiTest`, organisé en classes `@Nested`) :
+- **inscription :** hachage BCrypt en base, courriel normalisé, doublon refusé (`409`), mot de passe faible refusé ;
+- **connexion :** la réponse est **identique** pour un mauvais mot de passe et un courriel inconnu ;
+- **jetons :** absent → `401` au format RFC 9457 avec `WWW-Authenticate: Bearer` ; refusés aussi s'ils sont **signés avec une autre clé**, **expirés**, d'un **autre émetteur** ou **modifiés** ;
+- **isolation :** Bob ne voit pas les comptes d'Ana (`404`), ne peut ni retirer ni virer depuis ceux-ci, et le solde d'Ana reste intact. Ana, elle, peut virer **vers** Bob.
+
+### Questions possibles en entrevue
+- *Session ou JWT ?* → La session garde l'état côté serveur (facile à révoquer, mais il faut la partager entre instances). Le JWT est sans état côté serveur (facile à multiplier, mais difficile à révoquer avant son expiration, d'où la durée courte d'une heure).
+- *Comment révoquer un JWT ?* → Avec une durée courte et un jeton de rafraîchissement, ou une liste de jetons révoqués. Pour des systèmes plus gros : un serveur d'autorisation (Keycloak, Azure AD) et des clés RS256.
+- *HS256 ou RS256 ?* → HS256 utilise une seule clé secrète, qui signe et vérifie. RS256 utilise une clé privée pour signer et une clé publique pour vérifier : d'autres services peuvent alors vérifier sans pouvoir fabriquer de jetons.
+- *Pourquoi désactiver CSRF ?* → Parce que l'authentification ne passe pas par un cookie (voir plus haut).
+- *Où vérifiez-vous les droits ?* → Dans le service et dans la requête SQL. Jamais seulement côté interface, et jamais seulement dans le contrôleur.
+- *Comment testez-vous la sécurité ?* → Avec de vrais jetons émis par l'application, et des jetons **fabriqués exprès** pour être invalides : mauvaise clé, expiré, mauvais émetteur, signature modifiée.
+
+### Exercices pour toi
+1. Inscris-toi avec `curl`, colle ton jeton sur **jwt.io** et lis son contenu. Change un caractère et rappelle l'API : tu obtiens `401`.
+2. Ajoute `GET /api/auth/moi`, qui renvoie le client connecté (`@AuthenticationPrincipal Jwt`).
+3. Ajoute une **limite de tentatives** de connexion : par exemple 5 par 15 minutes et par courriel, avec un compteur en mémoire ou dans une table.

@@ -42,6 +42,14 @@ src/main/java/io/github/mamoudouhamadou/minibanque/
 │   ├── OuvertureCompte.java       ce que le client envoie (record + validation)
 │   ├── CompteReponse.java         ce que l'API renvoie (record)
 │   └── CompteIntrouvableException.java
+├── client/
+│   ├── Client.java                le client (courriel, hachage du mot de passe)
+│   ├── AuthService.java           inscription et connexion (BCrypt, temps constant)
+│   └── AuthController.java        /api/auth/inscription, /api/auth/connexion (publiques)
+├── securite/
+│   ├── ConfigurationSecurite.java règles d'accès, JWT (HS256), mots de passe, erreurs 401/403
+│   ├── Jetons.java                émission des jetons
+│   └── ClientConnecte.java        id du client à partir du jeton
 ├── operation/
 │   ├── Operation.java             une ligne du relevé (immuable), relation @ManyToOne vers Compte
 │   ├── OperationService.java      dépôts, retraits, VIREMENTS (transaction + verrous ordonnés)
@@ -53,7 +61,8 @@ src/main/resources/
 ├── application.properties
 └── db/migration/
     ├── V1__creer_table_compte.sql
-    └── V2__creer_table_operation.sql
+    ├── V2__creer_table_operation.sql
+    └── V3__clients_et_proprietaires.sql
 ```
 
 ## Étapes
@@ -62,7 +71,7 @@ src/main/resources/
 |---|---|---|---|
 | 1 | Comptes : ouvrir, consulter, lister (pagination) ; validation ; erreurs RFC 9457 ; tests avec un vrai PostgreSQL | Spring Boot, couches, JPA, Flyway, Bean Validation, Testcontainers | ✅ |
 | 2 | Dépôts, retraits et **virements transactionnels** ; historique des opérations ; **tests de concurrence** | `@Transactional`, verrous, `BigDecimal`, ACID | ✅ |
-| 3 | Sécurité : Spring Security + JWT, chaque client ne voit que ses comptes | Authentification, autorisation | ⬜ |
+| 3 | Sécurité : Spring Security + JWT, chaque client ne voit que ses comptes | Authentification, autorisation | ✅ |
 | 4 | Documentation OpenAPI (Swagger UI) et interface Angular | API-first, Angular | ⬜ |
 | 5 | Docker, CI GitHub Actions et mise en ligne | DevOps | ⬜ |
 

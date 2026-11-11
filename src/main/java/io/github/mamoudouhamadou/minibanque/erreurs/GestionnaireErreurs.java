@@ -1,5 +1,7 @@
 package io.github.mamoudouhamadou.minibanque.erreurs;
 
+import io.github.mamoudouhamadou.minibanque.client.CourrielDejaUtiliseException;
+import io.github.mamoudouhamadou.minibanque.client.IdentifiantsInvalidesException;
 import io.github.mamoudouhamadou.minibanque.compte.CompteIntrouvableException;
 import io.github.mamoudouhamadou.minibanque.compte.SoldeInsuffisantException;
 import io.github.mamoudouhamadou.minibanque.operation.VirementInvalideException;
@@ -59,6 +61,22 @@ public class GestionnaireErreurs extends ResponseEntityExceptionHandler {
         ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, e.getMessage());
         probleme.setTitle("Virement invalide");
         probleme.setType(URI.create("https://mini-banque.example/problemes/virement-invalide"));
+        return probleme;
+    }
+
+    /** 401 : mauvais courriel ou mot de passe (même message dans les deux cas). */
+    @ExceptionHandler(IdentifiantsInvalidesException.class)
+    ProblemDetail identifiantsInvalides(IdentifiantsInvalidesException e) {
+        ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
+        probleme.setTitle("Connexion refusée");
+        return probleme;
+    }
+
+    /** 409 : courriel déjà inscrit. */
+    @ExceptionHandler(CourrielDejaUtiliseException.class)
+    ProblemDetail courrielDejaUtilise(CourrielDejaUtiliseException e) {
+        ProblemDetail probleme = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+        probleme.setTitle("Courriel déjà utilisé");
         return probleme;
     }
 

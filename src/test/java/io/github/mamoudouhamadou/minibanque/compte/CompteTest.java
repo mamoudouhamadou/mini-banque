@@ -17,7 +17,7 @@ class CompteTest {
 
     @Test
     void ouvreUnCompteAvecDeuxDecimalesEtSansEspacesInutiles() {
-        Compte compte = Compte.ouvrir("  Ana Tremblay  ", new BigDecimal("100"), MAINTENANT);
+        Compte compte = Compte.ouvrir(1L, "  Ana Tremblay  ", new BigDecimal("100"), MAINTENANT);
 
         assertThat(compte.getTitulaire()).isEqualTo("Ana Tremblay");
         assertThat(compte.getSolde()).isEqualTo(new BigDecimal("100.00")); // equals compare aussi l'échelle
@@ -27,27 +27,27 @@ class CompteTest {
 
     @Test
     void refuseUnDepotNegatif() {
-        assertThatThrownBy(() -> Compte.ouvrir("Ana", new BigDecimal("-0.01"), MAINTENANT))
+        assertThatThrownBy(() -> Compte.ouvrir(1L, "Ana", new BigDecimal("-0.01"), MAINTENANT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("négatif");
     }
 
     @Test
     void refuseUnMontantAvecPlusDeDeuxDecimalesAuLieuDArrondirEnSilence() {
-        assertThatThrownBy(() -> Compte.ouvrir("Ana", new BigDecimal("10.555"), MAINTENANT))
+        assertThatThrownBy(() -> Compte.ouvrir(1L, "Ana", new BigDecimal("10.555"), MAINTENANT))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("2 décimales");
     }
 
     @Test
     void refuseUnTitulaireVide() {
-        assertThatThrownBy(() -> Compte.ouvrir("   ", BigDecimal.TEN, MAINTENANT))
+        assertThatThrownBy(() -> Compte.ouvrir(1L, "   ", BigDecimal.TEN, MAINTENANT))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void deposeEtRetireAuCentPres() {
-        Compte compte = Compte.ouvrir("Ana", new BigDecimal("10.00"), MAINTENANT);
+        Compte compte = Compte.ouvrir(1L, "Ana", new BigDecimal("10.00"), MAINTENANT);
 
         compte.deposer(new BigDecimal("0.10"));
         compte.deposer(new BigDecimal("0.20"));
@@ -58,7 +58,7 @@ class CompteTest {
 
     @Test
     void refuseUnRetraitSuperieurAuSoldeSansToucherAuSolde() {
-        Compte compte = Compte.ouvrir("Ana", new BigDecimal("50.00"), MAINTENANT);
+        Compte compte = Compte.ouvrir(1L, "Ana", new BigDecimal("50.00"), MAINTENANT);
 
         assertThatThrownBy(() -> compte.retirer(new BigDecimal("50.01")))
                 .isInstanceOf(SoldeInsuffisantException.class)
@@ -68,14 +68,14 @@ class CompteTest {
 
     @Test
     void permetDeViderLeCompteExactement() {
-        Compte compte = Compte.ouvrir("Ana", new BigDecimal("50.00"), MAINTENANT);
+        Compte compte = Compte.ouvrir(1L, "Ana", new BigDecimal("50.00"), MAINTENANT);
         compte.retirer(new BigDecimal("50"));
         assertThat(compte.getSolde()).isEqualByComparingTo("0");
     }
 
     @Test
     void refuseUnMontantNulOuNegatif() {
-        Compte compte = Compte.ouvrir("Ana", BigDecimal.TEN, MAINTENANT);
+        Compte compte = Compte.ouvrir(1L, "Ana", BigDecimal.TEN, MAINTENANT);
         assertThatThrownBy(() -> compte.deposer(BigDecimal.ZERO)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> compte.retirer(new BigDecimal("-1"))).isInstanceOf(IllegalArgumentException.class);
     }

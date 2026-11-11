@@ -26,6 +26,11 @@ public class Compte {
     @GeneratedValue(strategy = GenerationType.IDENTITY) // PostgreSQL génère l'id
     private Long id;
 
+    // Le propriétaire du compte (clé étrangère vers client). Un simple identifiant suffit ici :
+    // on n'a besoin que de COMPARER au client connecté, jamais de charger le client complet.
+    @Column(name = "client_id", nullable = false, updatable = false)
+    private Long clientId;
+
     @Column(nullable = false, length = 100)
     private String titulaire;
 
@@ -50,7 +55,8 @@ public class Compte {
     /** Constructeur vide exigé par JPA (protected : le code applicatif ne doit pas l'utiliser). */
     protected Compte() {}
 
-    private Compte(String titulaire, BigDecimal soldeInitial, Instant ouvertLe) {
+    private Compte(long clientId, String titulaire, BigDecimal soldeInitial, Instant ouvertLe) {
+        this.clientId = clientId;
         this.titulaire = titulaire;
         this.solde = soldeInitial;
         this.devise = "CAD";
@@ -58,7 +64,7 @@ public class Compte {
     }
 
     /** « Méthode fabrique » : la seule façon de créer un compte, avec ses règles. */
-    public static Compte ouvrir(String titulaire, BigDecimal depotInitial, Instant maintenant) {
+    public static Compte ouvrir(long clientId, String titulaire, BigDecimal depotInitial, Instant maintenant) {
         if (titulaire == null || titulaire.isBlank()) {
             throw new IllegalArgumentException("Le titulaire est obligatoire");
         }
@@ -66,7 +72,12 @@ public class Compte {
         if (depotInitial.signum() < 0) {
             throw new IllegalArgumentException("Le dépôt initial ne peut pas être négatif");
         }
-        return new Compte(titulaire.strip(), enCents(depotInitial), maintenant);
+        return new Compte(clientId, titulaire.strip(), enCents(depotInitial), maintenant);
+    }
+
+    /** Vrai si ce compte appartient au client donné. */
+    public boolean appartientA(long clientId) {
+        return this.clientId == clientId;
     }
 
     /** Ajoute de l'argent. Retourne le montant normalisé (2 décimales). */

@@ -1,10 +1,13 @@
 package io.github.mamoudouhamadou.minibanque.operation;
 
+import io.github.mamoudouhamadou.minibanque.securite.ClientConnecte;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,7 +17,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Routes des mouvements d'argent. Toute la logique est dans OperationService. */
+/**
+ * Routes des mouvements d'argent. Toute la logique est dans OperationService.
+ * {@code @AuthenticationPrincipal Jwt} : le jeton déjà vérifié par Spring Security, d'où l'on tire l'id du client.
+ */
 @RestController
 @Validated // active la validation des paramètres simples (@Min, @Max sur page et taille)
 public class OperationController {
@@ -27,28 +33,31 @@ public class OperationController {
 
     @PostMapping("/api/comptes/{id}/depots")
     @ResponseStatus(HttpStatus.CREATED)
-    public OperationReponse deposer(@PathVariable long id, @Valid @RequestBody MouvementRequete demande) {
-        return service.deposer(id, demande);
+    public OperationReponse deposer(
+            @AuthenticationPrincipal Jwt jeton, @PathVariable long id, @Valid @RequestBody MouvementRequete demande) {
+        return service.deposer(ClientConnecte.id(jeton), id, demande);
     }
 
     @PostMapping("/api/comptes/{id}/retraits")
     @ResponseStatus(HttpStatus.CREATED)
-    public OperationReponse retirer(@PathVariable long id, @Valid @RequestBody MouvementRequete demande) {
-        return service.retirer(id, demande);
+    public OperationReponse retirer(
+            @AuthenticationPrincipal Jwt jeton, @PathVariable long id, @Valid @RequestBody MouvementRequete demande) {
+        return service.retirer(ClientConnecte.id(jeton), id, demande);
     }
 
     @PostMapping("/api/virements")
     @ResponseStatus(HttpStatus.CREATED)
-    public VirementReponse virer(@Valid @RequestBody VirementRequete demande) {
-        return service.virer(demande);
+    public VirementReponse virer(@AuthenticationPrincipal Jwt jeton, @Valid @RequestBody VirementRequete demande) {
+        return service.virer(ClientConnecte.id(jeton), demande);
     }
 
     /** GET /api/comptes/{id}/operations?page=0&size=20 → le relevé, du plus récent au plus ancien. */
     @GetMapping("/api/comptes/{id}/operations")
     public Page<OperationReponse> releve(
+            @AuthenticationPrincipal Jwt jeton,
             @PathVariable long id,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return service.releve(id, page, size);
+        return service.releve(ClientConnecte.id(jeton), id, page, size);
     }
 }
