@@ -98,6 +98,7 @@ public class Compte {
     }
 
     /** Toujours 2 décimales (des cents) ; on refuse plutôt que d'arrondir en silence (10,555 $ → erreur). */
+
     static BigDecimal enCents(BigDecimal montant) {
         try {
             return montant.setScale(2, RoundingMode.UNNECESSARY);
