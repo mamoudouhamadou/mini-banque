@@ -10,6 +10,8 @@ API bancaire en **Java 25 / Spring Boot 4** : des clients qui s'inscrivent, ouvr
 - **PostgreSQL 17**, **Flyway** (migrations versionnées)
 - **Tests :** JUnit 5, AssertJ, MockMvcTester, **Testcontainers** (vrai PostgreSQL dans Docker)
 - Erreurs au format standard **RFC 9457** (`application/problem+json`)
+- **Documentation OpenAPI 3** (springdoc) : contrat sur `/v3/api-docs`, **Swagger UI** sur `/swagger-ui.html`
+- **Interface Angular 21** (dossier [`frontend/`](frontend/)) : signals, *zoneless*, Reactive Forms, intercepteur JWT, gardes de route, Vitest
 
 ## Lancer
 
@@ -27,6 +29,17 @@ export JWT_SECRET="$(openssl rand -base64 48)"   # PowerShell : $env:JWT_SECRET 
 ```
 
 Sous Windows, utiliser `mvnw.cmd`. Pour un autre port : `./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=8082`.
+
+**Essayer l'API dans le navigateur :** ouvre `/swagger-ui.html`, crée un client avec `POST /api/auth/inscription`, clique sur **Authorize** et colle le jeton.
+
+**Interface web :** l'API doit tourner sur le port 8082 (voir `frontend/proxy.conf.json`).
+
+```bash
+cd frontend
+npm install
+npm start      # http://localhost:4200
+npm test       # tests Angular (Vitest)
+```
 
 ## API
 

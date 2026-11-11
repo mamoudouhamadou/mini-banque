@@ -47,6 +47,8 @@ public class ConfigurationSecurite {
                 .authorizeHttpRequests(regles -> regles
                         .requestMatchers(HttpMethod.POST, "/api/auth/inscription", "/api/auth/connexion").permitAll()
                         .requestMatchers("/actuator/health", "/error").permitAll()
+                        // Documentation publique : elle décrit l'API, elle ne donne accès à aucune donnée.
+                        .requestMatchers(HttpMethod.GET, "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         .anyRequest().authenticated()) // refus par défaut : une route oubliée reste protégée
                 .oauth2ResourceServer(rs -> rs
                         .jwt(Customizer.withDefaults())

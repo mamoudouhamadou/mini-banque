@@ -72,7 +72,7 @@ src/main/resources/
 | 1 | Comptes : ouvrir, consulter, lister (pagination) ; validation ; erreurs RFC 9457 ; tests avec un vrai PostgreSQL | Spring Boot, couches, JPA, Flyway, Bean Validation, Testcontainers | ✅ |
 | 2 | Dépôts, retraits et **virements transactionnels** ; historique des opérations ; **tests de concurrence** | `@Transactional`, verrous, `BigDecimal`, ACID | ✅ |
 | 3 | Sécurité : Spring Security + JWT, chaque client ne voit que ses comptes | Authentification, autorisation | ✅ |
-| 4 | Documentation OpenAPI (Swagger UI) et interface Angular | API-first, Angular | ⬜ |
+| 4 | Documentation OpenAPI (Swagger UI) et interface Angular | API-first, Angular | ✅ |
 | 5 | Docker, CI GitHub Actions et mise en ligne | DevOps | ⬜ |
 
 Après chaque étape : lire `docs/JOURNAL.md`, relancer les tests soi-même, faire un commit.

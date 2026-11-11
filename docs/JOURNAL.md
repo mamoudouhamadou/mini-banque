@@ -188,3 +188,73 @@ Une colonne `NOT NULL` ne peut pas être ajoutée à une table qui contient déj
 1. Inscris-toi avec `curl`, colle ton jeton sur **jwt.io** et lis son contenu. Change un caractère et rappelle l'API : tu obtiens `401`.
 2. Ajoute `GET /api/auth/moi`, qui renvoie le client connecté (`@AuthenticationPrincipal Jwt`).
 3. Ajoute une **limite de tentatives** de connexion : par exemple 5 par 15 minutes et par courriel, avec un compteur en mémoire ou dans une table.
+
+---
+
+## Étape 4 : documentation OpenAPI et interface Angular
+
+### Partie A : OpenAPI et Swagger UI
+
+**Ordre de lecture :** `ConfigurationOpenApi.java`, les annotations `@Tag` et `@Operation` des contrôleurs, la règle ajoutée dans `ConfigurationSecurite`, puis `OpenApiTest.java`.
+
+- **OpenAPI 3 :** un format standard (JSON ou YAML) qui décrit l'API : routes, corps, réponses et sécurité. **springdoc** le **génère depuis le code** : la documentation ne peut donc jamais être en retard sur le code.
+- **Swagger UI** (`/swagger-ui.html`) : une page pour **lire et essayer** l'API. Le bouton **Authorize** reçoit le jeton JWT grâce au `@SecurityScheme` de type *bearer*.
+- **« API-first » :** à partir du contrat `/v3/api-docs`, on peut **générer** un client TypeScript, Java ou C#, l'importer dans Postman, ou écrire des tests de contrat.
+- **Routes publiques documentées :** `@SecurityRequirements` vide sur `AuthController` indique dans la doc que l'inscription et la connexion n'exigent pas de jeton.
+- **La documentation est publique, les données non :** seules les pages de documentation (`GET`) sont ouvertes dans Spring Security. Elles décrivent l'API sans donner accès à rien.
+- **Testé :** le contrat liste les 8 routes, déclare le schéma *bearer*, marque les routes publiques, et **n'expose pas** le paramètre interne `@AuthenticationPrincipal Jwt`. Swagger UI répond sans jeton.
+
+### Partie B : interface Angular
+
+**Ordre de lecture :**
+1. `frontend/src/app/app.config.ts` : routeur, HttpClient avec intercepteur, locale `fr-CA`.
+2. `app.routes.ts` : routes chargées à la demande et gardes.
+3. `auth/auth.service.ts`, puis `auth.interceptor.ts` et `auth.guard.ts`.
+4. `banque.service.ts` et `erreurs.ts`.
+5. `pages/` : connexion, comptes, compte, virement.
+6. `app.spec.ts` et `erreurs.spec.ts`.
+
+**Notions clés :**
+- **Composants *standalone* :** chaque composant déclare ce qu'il utilise (`imports: [...]`), sans `NgModule`. C'est la façon moderne d'écrire Angular.
+- **Signals :** `signal()` pour l'état, `computed()` pour les valeurs dérivées (le solde total), et la lecture dans le gabarit (`total()`). Quand un signal change, Angular met à jour **seulement** ce qui en dépend.
+- ***Zoneless* :** il n'y a plus de `zone.js` qui surveille tout. L'affichage se met à jour grâce aux signals : c'est plus léger et plus prévisible. Tout l'état des pages est donc dans des signals.
+- **Nouveau contrôle de flux :** `@if`, `@for (…; track c.id)` et `@empty` dans les gabarits. `track` indique à Angular comment reconnaître chaque élément d'une liste.
+- **Injection de dépendances :** `inject(AuthService)`, le même principe que Spring côté serveur.
+- **Reactive Forms :** le formulaire est un objet TypeScript (`FormBuilder.nonNullable.group`) avec des validateurs. La validation **finale** reste celle de l'API, dont les messages précis sont affichés.
+- **Intercepteur HTTP :** il ajoute `Authorization: Bearer …` à chaque appel (sauf `/api/auth/*`), et **déconnecte** automatiquement sur un `401`.
+- **Gardes de route :** elles évitent d'ouvrir une page protégée sans être connecté. ⚠️ C'est du **confort**, pas de la sécurité : la vraie protection est sur le serveur. Un pirate peut modifier le JavaScript, mais pas Spring Security.
+- ***Lazy loading* :** `loadComponent` charge chaque page seulement quand on la visite. La compilation montre un fichier séparé par page, de 3 à 5 ko.
+- **Proxy de développement** (`proxy.conf.json`) : `localhost:4200/api` est relayé vers l'API. Pour le navigateur, c'est la même origine, donc pas de CORS.
+- **Formats québécois :** `registerLocaleData(fr-CA)` et `LOCALE_ID` affichent `2 320,75 $` et `11 novembre 2026`.
+- **Où garder le jeton ?** Dans `sessionStorage`, effacé à la fermeture de l'onglet. C'est plus court que `localStorage`, mais lisible par un script injecté (XSS). Un cookie `HttpOnly` serait plus sûr contre le XSS, mais demanderait une protection CSRF : c'est un compromis à savoir expliquer.
+
+**Tests (Vitest, 9 tests) :**
+- `HttpTestingController` remplace le réseau : on vérifie les requêtes envoyées (corps, en-tête `Authorization`) et on choisit les réponses ;
+- cas couverts : la connexion ouvre la session ; l'intercepteur ajoute le jeton, mais **pas** sur les routes publiques ; un `401` déconnecte ; un jeton expiré est ignoré ; l'en-tête n'apparaît qu'une fois connecté ; les messages d'erreur RFC 9457 sont traduits correctement.
+
+**Vérifié en vrai** (API + Angular, dans le navigateur) :
+- accès sans être connecté → redirection vers `/connexion` ;
+- inscription → « Mes comptes », avec le total au format québécois ;
+- virement par le formulaire → confirmation avec la référence UUID et soldes mis à jour ;
+- retrait trop gros → le message `422` du serveur s'affiche ;
+- relevé avec « Virement reçu +300,00 $ » ;
+- compte d'un autre client → « Le compte 1 n'existe pas » ;
+- téléphone : aucun débordement ;
+- aucune erreur dans la console.
+
+### Problèmes rencontrés
+1. **Angular 22 exigeait Node 24.15**, alors que le PC a Node 24.13. Plutôt que de modifier Node sur tout le système (ce qui pourrait toucher d'autres projets), j'ai pris **Angular 21.2**, la version majeure précédente, toujours maintenue. Le code est le même. Mettre Node à jour permettra de passer à Angular 22 avec `ng update`.
+2. **Un test vérifiait un paramètre qui n'existait pas :** la route `/api/virements` n'a *aucun* paramètre dans la doc, ce qui était exactement le comportement voulu. J'ai rendu le test plus précis (le relevé expose seulement `id`, `page` et `size`) au lieu de l'affaiblir.
+3. **Erreurs non gérées dans les tests Angular :** la déconnexion naviguait vers `/connexion` dans un routeur de test vide. Solution : une route « attrape-tout » dans la configuration de test.
+
+### Questions possibles en entrevue
+- *Pourquoi documenter avec OpenAPI ?* → Un contrat standard, toujours à jour, et des clients générés automatiquement. Les équipes front-end et back-end travaillent à partir du même contrat.
+- *Signals ou RxJS ?* → Les signals servent à l'**état** synchrone (ce qu'on affiche). RxJS sert aux **flux** asynchrones (requêtes HTTP, événements). Ici, `HttpClient` renvoie des `Observable`, et le résultat est rangé dans des signals.
+- *Une garde de route, c'est de la sécurité ?* → Non. C'est de l'ergonomie. La sécurité est sur le serveur.
+- *Comment gérez-vous l'authentification dans Angular ?* → Un service avec la session dans des signals, un intercepteur qui ajoute le jeton et réagit au `401`, et des gardes pour la navigation.
+- ***Zoneless*, qu'est-ce que ça change ?* → Angular ne détecte plus les changements « par magie » après chaque événement : ce sont les signals qui le préviennent. C'est plus rapide et plus explicite.
+
+### Exercices pour toi
+1. Lance l'API et l'interface (README), crée ton accès et fais un virement vers un autre client.
+2. Génère un client TypeScript depuis `/v3/api-docs` (avec `openapi-typescript`), puis compare-le à `modeles.ts`.
+3. Ajoute la pagination à la page « Mes comptes », comme celle du relevé.
