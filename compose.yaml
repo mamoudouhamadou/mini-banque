@@ -1,0 +1,11 @@
+# PostgreSQL pour le développement. Rien à lancer à la main : Spring Boot (spring-boot-docker-compose)
+# démarre ce fichier au lancement de l'application et lit lui-même le port et les identifiants.
+services:
+  postgres:
+    image: 'postgres:17'
+    environment:
+      - 'POSTGRES_DB=minibanque'
+      - 'POSTGRES_USER=minibanque'
+      - 'POSTGRES_PASSWORD=minibanque_dev' # développement local seulement
+    ports:
+      - '5432' # port choisi au hasard par Docker : pas de conflit avec tes autres projets
