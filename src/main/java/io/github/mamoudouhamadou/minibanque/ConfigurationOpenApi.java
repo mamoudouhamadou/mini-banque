@@ -23,9 +23,9 @@ import org.springframework.context.annotation.Configuration;
                 version = "1.0",
                 description = """
                         API bancaire : comptes, dépôts, retraits et virements transactionnels.
-                        1. Crée un client avec POST /api/auth/inscription (ou connecte-toi).
-                        2. Copie le « jeton » de la réponse, clique sur « Authorize » et colle-le.
-                        3. Essaie les autres routes : elles sont protégées par ce jeton.""",
+                        1. Créer un client avec POST /api/auth/inscription (ou se connecter).
+                        2. Copier le « jeton » de la réponse, cliquer sur « Authorize » et le coller.
+                        3. Appeler les autres routes : elles sont protégées par ce jeton.""",
                 contact = @Contact(name = "Mamoudou Hamadou", url = "https://github.com/mamoudouhamadou/mini-banque")),
         // Par défaut, toutes les routes exigent le jeton (les routes publiques l'annulent avec @SecurityRequirements)
         security = @SecurityRequirement(name = "jeton"))

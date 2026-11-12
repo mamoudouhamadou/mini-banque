@@ -45,7 +45,7 @@ import { Compte } from '../modeles';
             </a>
           </li>
         } @empty {
-          <li class="vide">Aucun compte pour l'instant. Ouvre ton premier compte !</li>
+          <li class="vide">Aucun compte pour l'instant. Ouvrez votre premier compte.</li>
         }
       </ul>
     }

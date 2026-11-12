@@ -8,4 +8,4 @@ services:
       - 'POSTGRES_USER=minibanque'
       - 'POSTGRES_PASSWORD=minibanque_dev' # développement local seulement
     ports:
-      - '5432' # port choisi au hasard par Docker : pas de conflit avec tes autres projets
+      - '5432' # port choisi au hasard par Docker : aucun conflit avec un PostgreSQL déjà en place

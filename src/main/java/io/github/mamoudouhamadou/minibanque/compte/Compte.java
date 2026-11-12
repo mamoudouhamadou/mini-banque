@@ -48,7 +48,7 @@ public class Compte {
     private Instant ouvertLe;
 
     // Verrouillage optimiste : si deux transactions modifient le même compte en même temps,
-    // la deuxième échoue au lieu d'écraser silencieusement la première (utile à l'étape 2).
+    // la deuxième échoue au lieu d'écraser silencieusement la première (protection des virements simultanés).
     @Version
     private long version;
 

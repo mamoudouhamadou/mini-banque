@@ -117,7 +117,7 @@ public class ConfigurationSecurite {
             reponse.setCharacterEncoding(StandardCharsets.UTF_8.name());
             reponse.getWriter().write("""
                     {"title":"Authentification requise","status":401,\
-                    "detail":"Jeton absent, invalide ou expiré. Connecte-toi avec POST /api/auth/connexion."}""");
+                    "detail":"Jeton absent, invalide ou expiré. Connectez-vous avec POST /api/auth/connexion."}""");
         };
     }
 
@@ -127,7 +127,7 @@ public class ConfigurationSecurite {
             reponse.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
             reponse.setCharacterEncoding(StandardCharsets.UTF_8.name());
             reponse.getWriter().write("""
-                    {"title":"Accès refusé","status":403,"detail":"Tu n'as pas le droit d'accéder à cette ressource."}""");
+                    {"title":"Accès refusé","status":403,"detail":"Vous n'avez pas le droit d'accéder à cette ressource."}""");
         };
     }
 }

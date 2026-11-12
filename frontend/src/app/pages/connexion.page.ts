@@ -12,10 +12,10 @@ import { messageErreur } from '../erreurs';
     <main class="centre">
       <section class="carte etroite">
         <h1>🏦 Mini-banque</h1>
-        <p class="doux">{{ inscription() ? 'Ouvre ton accès client' : 'Connecte-toi à ton espace client' }}</p>
+        <p class="doux">{{ inscription() ? 'Créez votre accès client' : 'Connectez-vous à votre espace client' }}</p>
 
         @if (expiree()) {
-          <p class="info" role="status">Ta session a expiré. Reconnecte-toi.</p>
+          <p class="info" role="status">Votre session a expiré. Veuillez vous reconnecter.</p>
         }
 
         <form [formGroup]="formulaire" (ngSubmit)="soumettre()">
@@ -74,7 +74,7 @@ export class ConnexionPage {
     const { nom, courriel, motDePasse } = this.formulaire.getRawValue();
     // La validation finale est faite par l'API (messages précis) ; ici, on évite seulement les envois vides.
     if (!courriel || !motDePasse || (this.inscription() && !nom.trim())) {
-      this.erreur.set('Remplis tous les champs.');
+      this.erreur.set('Veuillez remplir tous les champs.');
       return;
     }
     this.envoi.set(true);

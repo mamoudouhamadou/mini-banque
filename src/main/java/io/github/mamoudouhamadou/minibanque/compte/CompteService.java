@@ -9,7 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Couche métier. {@code @Transactional} : tout ce que fait une méthode réussit ensemble
- * ou est annulé ensemble (atomicité). C'est essentiel pour les virements de l'étape 2.
+ * ou est annulé ensemble (atomicité). C'est essentiel pour les virements (voir OperationService).
  *
  * <p>Les dépendances arrivent par le constructeur (« injection de dépendances ») :
  * Spring les fournit, et les tests peuvent en passer d'autres.

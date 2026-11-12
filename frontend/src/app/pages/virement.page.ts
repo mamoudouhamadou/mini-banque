@@ -16,7 +16,7 @@ import { Compte, Virement } from '../modeles';
       <label>
         Depuis
         <select formControlName="source">
-          <option [ngValue]="null" disabled>Choisis un de tes comptes</option>
+          <option [ngValue]="null" disabled>Choisissez un de vos comptes</option>
           @for (c of comptes(); track c.id) {
             <option [ngValue]="c.id">n° {{ c.id }} · {{ c.titulaire }} ({{ c.solde | currency: c.devise : 'symbol-narrow' }})</option>
           }
@@ -25,7 +25,7 @@ import { Compte, Virement } from '../modeles';
       <label>
         Vers le compte n°
         <input formControlName="destination" type="number" min="1" placeholder="ex. 12" />
-        <small>Un de tes comptes ou celui d'un autre client.</small>
+        <small>Un de vos comptes ou celui d'un autre client.</small>
       </label>
       <label>Montant ($) <input formControlName="montant" type="number" min="0.01" step="0.01" /></label>
       <label>Description <input formControlName="description" maxlength="140" placeholder="ex. Loyer" /></label>

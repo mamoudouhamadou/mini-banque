@@ -44,7 +44,7 @@ public class GestionnaireErreurs extends ResponseEntityExceptionHandler {
 
     /**
      * 422 Unprocessable Content : la requête est bien formée, mais la règle métier l'interdit.
-     * (400 serait « ta requête est mal écrite » ; ici elle est correcte, c'est le solde qui manque.)
+     * (400 signifierait une requête mal formée ; ici elle est valide, c'est le solde qui manque.)
      */
     @ExceptionHandler(SoldeInsuffisantException.class)
     ProblemDetail soldeInsuffisant(SoldeInsuffisantException e) {
@@ -82,12 +82,12 @@ public class GestionnaireErreurs extends ResponseEntityExceptionHandler {
 
     /**
      * 409 : deux transactions ont modifié le même compte en même temps et @Version a protégé les données.
-     * Avec le verrou pessimiste du service, ça ne devrait pas arriver ; si ça arrive, le client réessaie.
+     * Avec le verrou pessimiste du service, ça ne devrait pas arriver ; le cas échéant, le client peut réessayer.
      */
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     ProblemDetail conflit(ObjectOptimisticLockingFailureException e) {
         ProblemDetail probleme = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT, "Le compte a été modifié en même temps par une autre opération. Réessaie.");
+                HttpStatus.CONFLICT, "Le compte a été modifié en même temps par une autre opération. Veuillez réessayer.");
         probleme.setTitle("Modification concurrente");
         return probleme;
     }
