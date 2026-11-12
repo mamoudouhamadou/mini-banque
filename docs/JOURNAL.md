@@ -298,7 +298,7 @@ Une colonne `NOT NULL` ne peut pas être ajoutée à une table qui contient déj
 - ✅ Le test de bout en bout du workflow, exécuté localement : `✅ Mini-banque fonctionnelle de bout en bout`.
 - ✅ Dans le navigateur : Angular se charge depuis Spring Boot, avec les styles et la redirection vers la connexion, et **aucune erreur CSP** dans la console.
 - ✅ 49 tests Java, 9 tests Angular, et actionlint sans erreur.
-- ⚠️ **Pas encore fait :** la mise en ligne réelle. Elle demande de créer le projet Neon et le service Render (voir `docs/DEPLOIEMENT.md`).
+- ✅ **En ligne** sur https://mini-banque.onrender.com (Neon + Render). **Problème rencontré au premier déploiement :** `'url' must start with "jdbc"`. L'URL Neon avait été collée dans son format habituel (`postgresql://…`) au lieu du format Java (`jdbc:postgresql://…`). Je l'ai corrigée dans les variables de Render, sans changer le code.
 
 ### Questions possibles en entrevue
 - *Comment déployez-vous une application Spring Boot avec Angular ?* → Une seule image Docker. Angular est compilé dans les ressources statiques, et Spring sert l'interface et l'API. C'est une seule origine, donc pas de CORS.

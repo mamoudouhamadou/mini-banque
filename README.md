@@ -2,6 +2,9 @@
 
 [![CI](https://github.com/mamoudouhamadou/mini-banque/actions/workflows/ci.yml/badge.svg)](https://github.com/mamoudouhamadou/mini-banque/actions/workflows/ci.yml)
 
+**🌐 Démo en ligne : https://mini-banque.onrender.com** · **📖 API interactive : https://mini-banque.onrender.com/swagger-ui.html**
+<sub>Hébergement gratuit : la première visite peut prendre 2 à 3 minutes (le serveur se réveille, puis Java démarre).</sub>
+
 API bancaire en **Java 25 / Spring Boot 4** : des clients qui s'inscrivent, ouvrent des comptes, déposent, retirent et virent de l'argent **de façon transactionnelle et sécurisée**, sans jamais perdre un cent, même en cas d'accès simultanés.
 
 Voir la [feuille de route](docs/FEUILLE_DE_ROUTE.md), le [journal d'apprentissage](docs/JOURNAL.md) et le [guide de mise en ligne](docs/DEPLOIEMENT.md).
